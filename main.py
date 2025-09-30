@@ -26,8 +26,9 @@ def cli():
     while True:
         try:
             spl = (click.prompt(get_prompt(), prompt_suffix="", type=str)).split(" ")
-            argument = []
             command = spl[0]
+            argument = []
+
             for i in range(1, len(spl)):
                 argument.append(spl[i])
             if command in ex_com:
