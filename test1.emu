@@ -1,0 +1,4 @@
+# Проверка out_var
+out_var %USERPROFILE%
+ls
+quit
