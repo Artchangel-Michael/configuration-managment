@@ -3,4 +3,5 @@ out_var $PATH
 ls
 cd
 out_var $TEMP
+badcmd
 exit

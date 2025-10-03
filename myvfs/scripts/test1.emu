@@ -1,4 +1,7 @@
 # Проверка out_var
 out_var %USERPROFILE%
 ls
+cd scripts
+ls
+run_script myvfs/scripts/test2.emu
 quit

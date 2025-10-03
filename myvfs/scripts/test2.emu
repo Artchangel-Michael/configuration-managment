@@ -1,0 +1,6 @@
+# Проверка ошибки
+cd
+ls
+
+
+run_script myvfs/scripts/test3.emu
