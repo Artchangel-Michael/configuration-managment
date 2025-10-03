@@ -5,11 +5,13 @@ import click
 # допустимые команды
 ex_com = ["exit", "ls", "cd", "quit", "out_var", "run_script"]
 
-def get_prompt(cwd: str) -> str:
+def get_prompt(cwd: str, vfs:str) -> str:
     """Формируем приглашение как в bash: username@hostname:~/...$"""
     user = os.getenv("USER") or os.getenv("USERNAME") or "user"
     host = socket.gethostname()
-    return f"{user}@{host}:{cwd}$"
+    vfs1 = vfs[::]
+    cwd1 = cwd.replace(vfs, "~", 1)
+    return f"{user}@{host}:{cwd1}$"
 
 @click.group()
 @click.option("--vfs", type=click.Path(), required=True, help="Путь к виртуальной файловой системе")
@@ -38,11 +40,9 @@ def repl(ctx):
     """Запуск интерактивного режима (REPL)"""
     while True:
         try:
-            spl = (click.prompt(get_prompt(ctx.obj["cwd"]), prompt_suffix="", type=str)).split()
-            if not spl:
-                continue
-            command, *argument = spl
-
+            spl = (click.prompt(get_prompt(ctx.obj["cwd"], ctx.obj["vfs"]), prompt_suffix="", type=str)).split(" ")
+            command = spl[0]
+            argument = spl[1:]
             if command in ex_com:
                 if command in ("exit", "quit"):
                     click.echo("Выход...")
@@ -99,7 +99,17 @@ def out_var(text):
 
 def run_script(path: str, ctx):
     """Выполнение скрипта построчно"""
-    click.echo(f"Выполняем скрипт: {path}")
+    if os.path.isfile(path):
+        click.echo(f"Выполняем скрипт: {path}")
+    else:
+        new_path = os.path.join(ctx.obj["cwd"], path)
+        if os.path.isfile(new_path):
+            path = new_path.replace(ctx.obj["vfs"], "~", 1)
+            click.echo(f"Выполняем скрипт: {path}")
+            path = new_path
+        else:
+            click.echo("Не существует скрипта по заданному пути")
+            return
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -134,3 +144,6 @@ def run_script(path: str, ctx):
 
 if __name__ == "__main__":
     cli(obj={})
+
+#Пример запуска
+#python main.py --vfs myvfs --script myvfs/scripts/test1.emu repl
