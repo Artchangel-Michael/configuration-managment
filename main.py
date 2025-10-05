@@ -5,7 +5,7 @@ import time
 import shutil
 
 # допустимые команды
-ex_com = ["exit", "ls", "cd", "quit", "out_var", "run_script", "head", "history", "uptime"]
+ex_com = ["exit", "ls", "cd", "quit", "out_var", "run_script", "head", "history", "uptime", "rmdir", "cp"]
 start_time = time.time()
 history_arr = []
 
@@ -32,6 +32,7 @@ def cli(ctx, vfs, script):
     os.mkdir(vfs)
     os.mkdir(vfs + "/scripts")
     os.mkdir(vfs + "/files")
+    os.mkdir(vfs + "/proj")
     with open(os.path.join(vfs, "scripts", "test1.emu"), "w", encoding = "utf-8") as file:
         file.write("#Проверка out_var\n")
         file.write("out_var %USERPROFILE%\n")
@@ -51,7 +52,12 @@ def cli(ctx, vfs, script):
     with open(os.path.join(vfs, "scripts", "test4.emu"), "w", encoding = "utf-8") as file:
         file.write("uptime\n")
         file.write("head myvfs/files/text1.txt\n")
-        file.write("history\nbadcmd\n")
+        file.write("history\n")
+        file.write("run_script myvfs/scripts/test5.emu\n")
+    with open(os.path.join(vfs, "scripts", "test5.emu"), "w", encoding = "utf-8") as file:
+        file.write("cp myvfs/proj myvfs/files/proj\n")
+        file.write("rmdir myvfs/proj\n")
+        file.write("badcmd\n")
         file.write("exit\n")
     with open(os.path.join(vfs, "files", "text1.txt"), "w", encoding = "utf-8") as file:
         file.write("Я, в своем познании настолько преисполнился,\n"
@@ -132,14 +138,15 @@ def repl(ctx):
                 elif command == "run_script":
                     run_script(argument[0], ctx)
                 elif command == "head":
-                    if len(argument) == 1:
-                        head(argument[0], None, ctx)
-                    else:
-                        head(argument[0], argument[1], ctx)
+                    head(argument, ctx)
                 elif command == "history":
                     history_def(argument)
                 elif command == "uptime":
                     uptime_command()
+                elif command == "rmdir":
+                    rmdir_command(ctx, argument)
+                elif command == "cp":
+                    cp_command(ctx, argument)
                 else:
                     click.echo(f"Выполнено: {command}")
             else:
@@ -175,55 +182,6 @@ def cd_command(ctx, args):
             click.echo("[ERROR] Нельзя выйти за пределы VFS")
     else:
         click.echo(f"[ERROR] Нет такой директории: {args[0]}")
-
-def history_def(args):
-    if not args:
-        for i in range(len(history_arr)):
-            click.echo(f"Операция номер {i}: {history_arr[i]}")
-        return
-    else:
-        for i in range(0, len(args)):
-            if not args[i].isdigit():
-                click.echo(f"Недопустимый аргумент: {args}")
-                return
-        if len(history_arr) < int(args):
-            for q in range(len(history_arr)):
-                click.echo(f"Операция номер {q}: {history_arr[q]}")
-        else:
-            for q in range(int(args)):
-                click.echo(f"Операция номер {q}: {history_arr[q]}")
-
-
-def head(path: str, number=None, ctx=None):
-    """Выполнение скрипта построчно"""
-    if os.path.isfile(path):
-        click.echo(f"Читаем файл: {path}")
-    else:
-        new_path = os.path.join(ctx.obj["cwd"], path)
-        if os.path.isfile(new_path):
-            path = new_path.replace(ctx.obj["vfs"], "~", 1)
-            click.echo(f"Выполняем скрипт: {path}")
-            path = new_path
-        else:
-            click.echo("Не существует файла по заданному пути")
-            return
-    if number is None:
-        numb = 10
-    else:
-        for q in range(len(number)):
-            if not(number[q].isdigit()):
-                click.echo("Вторым аргументом должно передаваться число")
-                return
-        numb = int(number)
-    i = 0
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            if numb == i:
-                return
-            line = line.strip()
-            click.echo(f"{line}")
-            i += 1
-
 
 def out_var(text):
     """Раскрытие переменных окружения"""
@@ -269,14 +227,15 @@ def run_script(path: str, ctx):
                     elif command == "run_script":
                         run_script(argument[0], ctx)
                     elif command == "head":
-                        if len(argument) == 1:
-                            head(argument[0], None, ctx)
-                        else:
-                            head(argument[0], argument[1], ctx)
+                        head(argument, ctx)
                     elif command == "history":
                         history_def(argument)
                     elif command == "uptime":
                         uptime_command()
+                    elif command == "rmdir":
+                        rmdir_command(ctx, argument)
+                    elif command == "cp":
+                        cp_command(ctx, argument)
                 else:
                     click.echo(f"Неизвестная команда: {command}")
                     break
@@ -291,6 +250,112 @@ def uptime_command():
     minutes, seconds = divmod(rem, 60)
     milliseconds = int((delta - int(delta)) * 1000)
     click.echo(f"Uptime: {hours}h {minutes}m {seconds}s {milliseconds}ms")
+
+def rmdir_command(ctx, args):
+    """Удаление директории внутри VFS"""
+    if not args:
+        click.echo("[ERROR] Укажите директорию для удаления")
+        return
+    path = args[0]
+    if os.path.isdir(path):
+        abs_path = os.path.abspath(path)
+    else:
+        new_path = os.path.join(ctx.obj["cwd"], path)
+        if os.path.isdir(new_path):
+            abs_path = os.path.abspath(new_path)
+    if not abs_path.startswith(ctx.obj["vfs"]):
+        click.echo("[ERROR] Нельзя выйти за пределы VFS")
+        return
+    if os.path.isdir(abs_path):
+        try:
+            os.rmdir(abs_path)  # удаляет только пустые каталоги
+            click.echo(f"Директория удалена: {args[0]}")
+        except OSError:
+            click.echo(f"[ERROR] Директория {args[0]} не пуста")
+    else:
+        click.echo(f"[ERROR] Нет такой директории: {args[0]}")
+
+def head(argument, ctx):
+    """Выполнение скрипта построчно"""
+    path = argument[0]
+    if len(argument) > 1:
+        number = argument[1]
+    else:
+        number = None
+    if os.path.isfile(path):
+        click.echo(f"Читаем файл: {path}")
+    else:
+        new_path = os.path.join(ctx.obj["cwd"], path)
+        if os.path.isfile(new_path):
+            click.echo(f"Читаем файл: {new_path.replace(ctx.obj['vfs'], '~', 1)}")
+            path = new_path
+        else:
+            click.echo("Не существует файла по заданному пути")
+            return
+
+    if number is None:
+        numb = 10
+    elif number.isdigit():
+        numb = int(number)
+    else:
+        click.echo("Вторым аргументом должно передаваться число")
+        return
+    i = 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if numb == i:
+                return
+            line = line.strip()
+            click.echo(f"{line}")
+            i += 1
+        if i != numb:
+            click.echo(f"В файле меньше {number} строк.\n"
+                       f"Считаны все возможные строки файла")
+
+def history_def(args):
+    if not args:
+        for i in range(len(history_arr)):
+            click.echo(f"Операция номер {i}: {history_arr[i]}")
+        return
+    else:
+        for i in range(0, len(args)):
+            if not args[i].isdigit():
+                click.echo(f"Недопустимый аргумент: {args}")
+                return
+        if len(history_arr) < int(args):
+            for q in range(len(history_arr)):
+                click.echo(f"Операция номер {q}: {history_arr[q]}")
+        else:
+            for q in range(int(args)):
+                click.echo(f"Операция номер {q}: {history_arr[q]}")
+
+def cp_command(ctx, args):
+    """Копирование файла или директории"""
+    if len(args) < 2:
+        click.echo("[ERROR] Использование: cp <источник> <назначение>")
+        return
+
+    abs_src = os.path.abspath(args[0])
+    abs_dst = os.path.abspath(args[1])
+
+    if not abs_src.startswith(ctx.obj["vfs"]) or not abs_dst.startswith(ctx.obj["vfs"]):
+        click.echo("[ERROR] Нельзя выйти за пределы VFS")
+        return
+
+    if os.path.isdir(abs_src):
+        try:
+            shutil.copytree(abs_src, abs_dst)
+            click.echo(f"Скопирована директория {args[0]} -> {args[1]}")
+        except FileExistsError:
+            click.echo(f"[ERROR] Директория {args[1]} уже существует")
+    elif os.path.isfile(abs_src):
+        try:
+            shutil.copy2(abs_src, abs_dst)
+            click.echo(f"Скопирован файл {args[0]} -> {args[1]}")
+        except Exception as e:
+            click.echo(f"[ERROR] Не удалось скопировать файл: {e}")
+    else:
+        click.echo(f"[ERROR] Источник не найден: {args[0]}")
 
 
 if __name__ == "__main__":
