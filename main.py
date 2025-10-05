@@ -1,9 +1,13 @@
 import os
 import socket
 import click
+import time
+import shutil
 
 # допустимые команды
-ex_com = ["exit", "ls", "cd", "quit", "out_var", "run_script"]
+ex_com = ["exit", "ls", "cd", "quit", "out_var", "run_script", "head", "history", "uptime"]
+start_time = time.time()
+history_arr = []
 
 def get_prompt(cwd: str, vfs:str) -> str:
     """Формируем приглашение как в bash: username@hostname:~/...$"""
@@ -15,14 +19,78 @@ def get_prompt(cwd: str, vfs:str) -> str:
 
 @click.group()
 @click.option("--vfs", type=click.Path(), required=True, help="Путь к виртуальной файловой системе")
-@click.option("--script", type=click.Path(exists=True), help="Путь к стартовому скрипту")
+@click.option("--script", type=click.Path(), help="Путь к стартовому скрипту")
 @click.pass_context
 def cli(ctx, vfs, script):
-    """
-    Эмулятор с параметрами:
+    """ Эмулятор с параметрами:
       --vfs    путь к VFS
       --script стартовый скрипт
     """
+
+    if os.path.isdir(vfs):
+        shutil.rmtree(vfs)
+    os.mkdir(vfs)
+    os.mkdir(vfs + "/scripts")
+    os.mkdir(vfs + "/files")
+    with open(os.path.join(vfs, "scripts", "test1.emu"), "w", encoding = "utf-8") as file:
+        file.write("#Проверка out_var\n")
+        file.write("out_var %USERPROFILE%\n")
+        file.write("ls\n")
+        file.write("cd scripts\n")
+        file.write("ls\n")
+        file.write("run_script myvfs/scripts/test2.emu\n")
+        file.write("quit\n")
+    with open(os.path.join(vfs, "scripts", "test2.emu"), "w", encoding = "utf-8") as file:
+        file.write("# Проверка ошибки\ncd\nls\n"
+                   "run_script myvfs/scripts/test3.emu")
+    with open(os.path.join(vfs, "scripts", "test3.emu"), "w", encoding = "utf-8") as file:
+        file.write("# Проверка сразу нескольких команд \n"
+                   "out_var $PATH\ncd scripts\nrun_script test4.emu\nout_var $TEMP "
+                   ""
+                   "\nexit")
+    with open(os.path.join(vfs, "scripts", "test4.emu"), "w", encoding = "utf-8") as file:
+        file.write("uptime\n")
+        file.write("head myvfs/files/text1.txt\n")
+        file.write("history\nbadcmd\n")
+        file.write("exit\n")
+    with open(os.path.join(vfs, "files", "text1.txt"), "w", encoding = "utf-8") as file:
+        file.write("Я, в своем познании настолько преисполнился,\n"
+                   "что как будто бы уже сто триллионов миллиардов лет,\n"
+                   "проживаю на триллионах и триллионах таких же планет.\n"
+                   "Планет, как эта Земля. Мне этот мир уже во многом понятен,\n"
+                   "и ищу я здесь только одного - покоя, умиротворения,\n"
+                   "и вот этой гармонии, от слияния с бесконечно-вечным,\n"
+                   "от созерцания этого великого фрактального подобия,\n"
+                   "и от вот этого замечательного всеединства существа,\n"
+                   "бесконечно-вечного, куда ни посмотри:\n"
+                   "хоть вглубь - в бесконечно малое,\n"
+                   "хоть ввысь - в бесконечно большое.\n"
+                   "А каков твой выбор? Иди же, суетись дальше...\n\n"
+                   "Твое распределение — это твой путь,\n"
+                   "и твой горизонт познаний, ощущений,\n"
+                   "и ограниченность собственной природы.\n"
+                   "И он несоизмеримо мелок по сравнению с моим...\n"
+                   "Порой, я ощущаю себя глубоким старцем,\n"
+                   "потратившим жизнь, в поисках рецепта бессмертия,\n"
+                   "формулы вечной жизни.\n"
+                   "Я нахожусь на этой планете, с самого момента её зарождения.\n"
+                   "Когда облако прекурсоров, трансформируясь поэтапно,\n"
+                   "превращалось в звезду, по имени Солнце.\n"
+                   "Я помню ослепляющий взрыв газопылевого субстрата,\n"
+                   "лучи Си, разрезающие мрак у врат Тангейзера,\n"
+                   "атакующие корабли, пылающие над Орионом...\n\n"
+                   "Меня не покидает ощущение, что я живу на этой Земле,\n"
+                   "вот уже пять миллиардов лет, и знаю её вдоль и поперек.\n"
+                   "Я был на этой планете, несчётное множество раз.\n"
+                   "Я был величественнее Цезаря, беспощаднее Гитлера,\n"
+                   "безжалостней всех самых свирепых тиранов.\n"
+                   "Я был и рабом, и бесправным шудрой, изгоем, отщепенцем,\n"
+                   "проживал жизни, в положении намного худшем, чем нынешнее.\n"
+                   "Я говорю так, потому что чувствую в себе\n"
+                   "эту пеструю мозаику пережитых событий и состояний.\n"
+                   "Где-то я был подобен растению, где-то был подобен птице,\n"
+                   "где-то - червю, а где-то был просто сгустком камня.")
+
     ctx.ensure_object(dict)
     ctx.obj["vfs"] = os.path.abspath(vfs)
     ctx.obj["cwd"] = ctx.obj["vfs"]   # начинаем в корне VFS
@@ -32,7 +100,13 @@ def cli(ctx, vfs, script):
     click.echo(f"[DEBUG] Script path: {script}")
 
     if script:
-        run_script(script, ctx)
+        # Превращаем относительный путь в абсолютный внутри VFS
+        script_path = os.path.abspath(script)
+        if os.path.isfile(script_path):
+            run_script(script_path, ctx)
+        else:
+            click.echo(f"Не существует скрипта по пути: {script_path}")
+
 
 @cli.command()
 @click.pass_context
@@ -44,7 +118,9 @@ def repl(ctx):
             command = spl[0]
             argument = spl[1:]
             if command in ex_com:
+                history_arr.insert(0, " ".join(spl))
                 if command in ("exit", "quit"):
+                    shutil.rmtree("myvfs")
                     click.echo("Выход...")
                     break
                 elif command == "ls":
@@ -55,6 +131,15 @@ def repl(ctx):
                     out_var(argument)
                 elif command == "run_script":
                     run_script(argument[0], ctx)
+                elif command == "head":
+                    if len(argument) == 1:
+                        head(argument[0], None, ctx)
+                    else:
+                        head(argument[0], argument[1], ctx)
+                elif command == "history":
+                    history_def(argument)
+                elif command == "uptime":
+                    uptime_command()
                 else:
                     click.echo(f"Выполнено: {command}")
             else:
@@ -91,6 +176,55 @@ def cd_command(ctx, args):
     else:
         click.echo(f"[ERROR] Нет такой директории: {args[0]}")
 
+def history_def(args):
+    if not args:
+        for i in range(len(history_arr)):
+            click.echo(f"Операция номер {i}: {history_arr[i]}")
+        return
+    else:
+        for i in range(0, len(args)):
+            if not args[i].isdigit():
+                click.echo(f"Недопустимый аргумент: {args}")
+                return
+        if len(history_arr) < int(args):
+            for q in range(len(history_arr)):
+                click.echo(f"Операция номер {q}: {history_arr[q]}")
+        else:
+            for q in range(int(args)):
+                click.echo(f"Операция номер {q}: {history_arr[q]}")
+
+
+def head(path: str, number=None, ctx=None):
+    """Выполнение скрипта построчно"""
+    if os.path.isfile(path):
+        click.echo(f"Читаем файл: {path}")
+    else:
+        new_path = os.path.join(ctx.obj["cwd"], path)
+        if os.path.isfile(new_path):
+            path = new_path.replace(ctx.obj["vfs"], "~", 1)
+            click.echo(f"Выполняем скрипт: {path}")
+            path = new_path
+        else:
+            click.echo("Не существует файла по заданному пути")
+            return
+    if number is None:
+        numb = 10
+    else:
+        for q in range(len(number)):
+            if not(number[q].isdigit()):
+                click.echo("Вторым аргументом должно передаваться число")
+                return
+        numb = int(number)
+    i = 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if numb == i:
+                return
+            line = line.strip()
+            click.echo(f"{line}")
+            i += 1
+
+
 def out_var(text):
     """Раскрытие переменных окружения"""
     input_str = " ".join(text)
@@ -107,16 +241,17 @@ def run_script(path: str, ctx):
             path = new_path.replace(ctx.obj["vfs"], "~", 1)
             click.echo(f"Выполняем скрипт: {path}")
             path = new_path
-        else:
-            click.echo("Не существует скрипта по заданному пути")
-            return
+        else: click.echo(f"Не существует скрипта по пути: {path}")
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#"):
+            if not line or line.startswith("#"):  # пропускаем пустые и комментарии
                 continue
-            click.echo(f"$ {line}")
+            click.echo(f"$ {line}")  # имитация ввода пользователя
             try:
+                spl = line.split(" ")
+                command = spl[0]
+                argument = spl[1:]
                 spl = line.split()
                 if not spl:
                     continue
@@ -133,14 +268,30 @@ def run_script(path: str, ctx):
                         out_var(argument)
                     elif command == "run_script":
                         run_script(argument[0], ctx)
-                    else:
-                        click.echo(f"Выполнено: {command}")
+                    elif command == "head":
+                        if len(argument) == 1:
+                            head(argument[0], None, ctx)
+                        else:
+                            head(argument[0], argument[1], ctx)
+                    elif command == "history":
+                        history_def(argument)
+                    elif command == "uptime":
+                        uptime_command()
                 else:
-                    raise ValueError(f"Неизвестная команда: {command}")
-            except Exception as e:
-                click.echo(f"[ERROR] {e}")
+                    click.echo(f"Неизвестная команда: {command}")
+                    break
+            except():
                 click.echo("[INFO] Скрипт остановлен из-за ошибки")
                 break
+
+def uptime_command():
+    """Вывод времени работы программы"""
+    delta = time.time() - start_time
+    hours, rem = divmod(int(delta), 3600)
+    minutes, seconds = divmod(rem, 60)
+    milliseconds = int((delta - int(delta)) * 1000)
+    click.echo(f"Uptime: {hours}h {minutes}m {seconds}s {milliseconds}ms")
+
 
 if __name__ == "__main__":
     cli(obj={})
